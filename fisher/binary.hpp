@@ -41,7 +41,7 @@ namespace binary {
 		}
 
 
-		bytes& endianed() {
+		bytes& endianed(endian::type mode) {
 			if (mode == endian::type::null) {
 				throw "not dicided mode";
 			}
@@ -58,7 +58,7 @@ namespace binary {
 			return *this;
 		}
 
-		bytes& optioned() {
+		bytes& optioned(option_type option) {
 			if (option == option_type::not_eof) {
 				pop_back();
 			}
@@ -66,15 +66,20 @@ namespace binary {
 		}
 
 		template<typename T>
-		bytes& operator<<(T&& a) {
-			auto b = detail::cast(a).endianed().optioned();
+		bytes& operator<<(T&& a);
+
+		bytes& operator<<(bytes&& a) {
+
 			if (size() == 0)
-				push_back(b[0]);
+				push_back(a[0]);
 			else
-				insert(end(), b.begin(), b.end()); //連結するstd::vector<byte>のサイズはよくわからないのでstd::copyは使わないでおく
+				insert(end(), a.begin(), a.end()); //連結するstd::vector<byte>のサイズはよくわからないのでstd::copyは使わないでおく
+
 			option = option_type::none;
 			return *this;
 		}
+
+
 
 		bytes& operator<<(endian::type  mode) {
 			this->mode = mode;
@@ -128,6 +133,7 @@ namespace binary {
 		template<typename T,typename = void>
 		struct helper {
 			static bytes cast(const T& val) {
+
 				return bytes(byte(val));
 			}
 		};
@@ -154,7 +160,7 @@ namespace binary {
 		};
 
 		template<class T>
-		bytes cast(T val) {
+		bytes cast(const T& val) {
 			return helper<T>::cast(val);
 		}
 
@@ -162,16 +168,20 @@ namespace binary {
 			return bytes(val);
 		}
 
+		bytes cast(const bytes& val) {
+			return val;
+		}
+
 		bytes cast(word val) {
-			return (cast<byte>((val & 0xFF00) >> 8) << cast<byte>(val & 0x00FF));
+			return (cast((val & 0xFF00) >> 8) << endian::type::big <<  cast(val & 0x00FF));
 		}
 
 		bytes cast(dword val) {
-			return (cast<word>((val & 0xFFFF0000) >> 16) << cast<word>(val & 0xFFFF));
+			return (cast(word((val & 0xFFFF0000) >> 16)) << endian::type::big <<  cast(word(val & 0xFFFF)));
 		}
 
 		bytes cast(qword val) {
-			return (cast<dword>((val & 0xFFFFFFFF00000000) >> 32) << cast<dword>(val & 0xFFFFFFFF));
+			return (cast(dword((val & 0xFFFFFFFF00000000) >> 32)) << endian::type::big << cast(dword(val & 0xFFFFFFFF)));
 		}
 
 		bytes cast(const char* val) {
@@ -182,5 +192,15 @@ namespace binary {
 			}
 			return ret;
 		}
+	}
+
+	template<typename T>
+	bytes& bytes::operator<<(T&& a) {
+		auto b = detail::cast(a).endianed(mode).optioned(option);
+
+		insert(end(), b.begin(), b.end()); //連結するstd::vector<byte>のサイズはよくわからないのでstd::copyは使わないでおく
+
+		option = option_type::none;
+		return *this;
 	}
 }
